@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Maintenance Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body class="bg-slate-900 text-white p-6">
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-blue-400">Autonomous AI Maintenance Hub</h1>
+                <p class="text-slate-400">Real-time Vehicle Monitoring & Agent Orchestration</p>
+            </div>
+            <div class="flex gap-4">
+                <div class="bg-slate-800 p-3 rounded-lg">
+                    <span class="block text-xs text-slate-500">Active Agents</span>
+                    <span class="text-xl font-mono text-green-400">5 Online</span>
+                </div>
+                <div class="bg-slate-800 p-3 rounded-lg">
+                    <span class="block text-xs text-slate-500">Security Status</span>
+                    <span class="text-xl font-mono text-blue-400">Secure</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Telematics Stream -->
+            <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                    Live Telematics (VIN-123456789)
+                </h2>
+                <div id="telematics-chart" class="h-64 mb-4"></div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-slate-700 p-3 rounded">
+                        <div class="text-xs text-slate-400">Engine Temp</div>
+                        <div id="temp-val" class="text-2xl font-mono">-- °C</div>
+                    </div>
+                    <div class="bg-slate-700 p-3 rounded">
+                        <div class="text-xs text-slate-400">Oil Pressure</div>
+                        <div id="pressure-val" class="text-2xl font-mono">-- PSI</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Agent Activity Log -->
+            <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 lg:col-span-2">
+                <h2 class="text-xl font-semibold mb-4">Agent Orchestration Log</h2>
+                <div id="agent-log" class="h-80 overflow-y-auto font-mono text-sm space-y-2 bg-slate-900 p-4 rounded border border-slate-700">
+                    <!-- Logs will appear here -->
+                    <div class="text-slate-500 italic">Waiting for events...</div>
+                </div>
+                <button onclick="triggerAnalysis()" class="mt-4 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg transition-colors w-full font-semibold">
+                    Trigger Full Diagnostic Scan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const vehicleId = "VIN-123456789";
+        
+        // WebSocket for Telematics
+        const ws = new WebSocket(`ws://localhost:8000/ws/telematics/${vehicleId}`);
+        
+        let tempData = [];
+        let timeData = [];
+        
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            
+            // Update DOM
+            document.getElementById('temp-val').innerText = data.engine_temp + " °C";
+            document.getElementById('pressure-val').innerText = data.oil_pressure + " PSI";
+            
+            // Update Chart
+            const now = new Date();
+            timeData.push(now);
+            tempData.push(data.engine_temp);
+            
+            if(timeData.length > 20) {
+                timeData.shift();
+                tempData.shift();
+            }
+            
+            Plotly.newPlot('telematics-chart', [{
+                x: timeData,
+                y: tempData,
+                type: 'scatter',
+                line: {color: '#60a5fa'}
+            }], {
+                margin: {t: 0, r: 0, l: 30, b: 30},
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: {color: '#94a3b8'},
+                xaxis: {showgrid: false},
+                yaxis: {showgrid: true, gridcolor: '#334155'}
+            }, {displayModeBar: false});
+        };
+
+        async function triggerAnalysis() {
+            const logDiv = document.getElementById('agent-log');
+            logDiv.innerHTML += `<div class="text-blue-400 border-l-2 border-blue-500 pl-2 my-1">User initiated diagnostic scan for ${vehicleId}...</div>`;
+            
+            try {
+                const response = await fetch(`http://localhost:8000/process/${vehicleId}`);
+                const result = await response.json();
+                
+                // Simulate streaming logs based on the result
+                logDiv.innerHTML += `<div class="text-green-400 border-l-2 border-green-500 pl-2 my-1">Master Agent: Workflow started.</div>`;
+                
+                setTimeout(() => {
+                    logDiv.innerHTML += `<div class="text-slate-300 pl-4">> Data Analysis: Completed.</div>`;
+                }, 500);
+                
+                setTimeout(() => {
+                    logDiv.innerHTML += `<div class="text-slate-300 pl-4">> Diagnosis: ${result.diagnosis.status} (${result.diagnosis.confidence_score * 100}% confidence).</div>`;
+                    if(result.diagnosis.issues.length > 0) {
+                        result.diagnosis.issues.forEach(issue => {
+                            logDiv.innerHTML += `<div class="text-red-400 pl-6">- Issue: ${issue}</div>`;
+                        });
+                    }
+                }, 1500);
+                
+                setTimeout(() => {
+                    if(result.appointment) {
+                        logDiv.innerHTML += `<div class="text-yellow-400 border-l-2 border-yellow-500 pl-2 my-1">Scheduling Agent: Appointment booked at ${result.appointment.service_center} for ${result.appointment.appointment_time}.</div>`;
+                    }
+                    if(result.customer_notification) {
+                        logDiv.innerHTML += `<div class="text-purple-400 border-l-2 border-purple-500 pl-2 my-1">Customer Agent: Notification sent via ${result.customer_notification.channel}.</div>`;
+                    }
+                    if(result.manufacturing_feedback) {
+                        logDiv.innerHTML += `<div class="text-cyan-400 border-l-2 border-cyan-500 pl-2 my-1">Manufacturing Agent: Feedback loop closed. ${result.manufacturing_feedback.new_defects_logged} defects logged.</div>`;
+                    }
+                     logDiv.scrollTop = logDiv.scrollHeight;
+                }, 2500);
+
+            } catch (error) {
+                logDiv.innerHTML += `<div class="text-red-500">Error: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
